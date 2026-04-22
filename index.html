@@ -2,261 +2,164 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>The Talha's Run - Pro</title>
+<title>The Talha's Run - Next Gen</title>
 <style>
 body {
     margin: 0;
     overflow: hidden;
-    font-family: Arial;
     background: #000;
+    font-family: Arial;
 }
 
-/* INTRO */
-#intro {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    background: radial-gradient(circle, #222, #000);
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    z-index: 10;
-    color: white;
-}
-
-#intro h1 {
-    font-size: 50px;
-    color: gold;
-    animation: glow 2s infinite;
-}
-
-@keyframes glow {
-    0% {text-shadow: 0 0 10px red;}
-    50% {text-shadow: 0 0 25px yellow;}
-    100% {text-shadow: 0 0 10px red;}
-}
-
-button {
-    padding: 12px 25px;
-    font-size: 18px;
-    margin-top: 20px;
-    cursor: pointer;
-}
-
-/* GAME */
-#game {
-    display: none;
-    position: relative;
-    width: 100%;
-    height: 100vh;
+/* CANVAS */
+canvas {
+    display: block;
     background: linear-gradient(#87CEEB, #228B22);
-    overflow: hidden;
-}
-
-.player, .cop, .obstacle, .coin {
-    position: absolute;
-}
-
-/* PLAYER */
-.player {
-    width: 50px;
-    height: 50px;
-    background: red;
-    bottom: 80px;
-    left: 50px;
-}
-
-/* COP */
-.cop {
-    width: 50px;
-    height: 50px;
-    background: blue;
-    bottom: 80px;
-    left: 200px;
-}
-
-/* OBSTACLE */
-.obstacle {
-    width: 40px;
-    height: 60px;
-    background: black;
-    bottom: 80px;
-}
-
-/* COIN */
-.coin {
-    width: 25px;
-    height: 25px;
-    border-radius: 50%;
-    background: gold;
-    bottom: 150px;
-}
-
-/* SCORE */
-#score {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    font-size: 20px;
-    color: white;
-    z-index: 5;
-}
-
-/* GAME OVER */
-#gameOver {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.8);
-    color: white;
-    display: none;
-    justify-content: center;
-    align-items: center;
-    flex-direction: column;
-    z-index: 20;
 }
 </style>
 </head>
 <body>
 
-<!-- INTRO -->
-<div id="intro">
-    <h1>The Talha's Run</h1>
-    <p>🏃 Talha is escaping from Police 🚓</p>
-    <button onclick="startGame()">Start Game</button>
-</div>
-
-<!-- GAME -->
-<div id="game">
-
-<div id="score">Score: 0</div>
-
-<div class="player" id="player"></div>
-<div class="cop" id="cop"></div>
-
-<div class="obstacle" id="obstacle"></div>
-<div class="coin" id="coin"></div>
-
-</div>
-
-<!-- GAME OVER -->
-<div id="gameOver">
-    <h1>Game Over 💥</h1>
-    <button onclick="location.reload()">Restart</button>
-</div>
+<canvas id="game"></canvas>
 
 <script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
 
-let gameStarted = false;
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// PLAYER (Talha)
+let player = {
+    x: 80,
+    y: canvas.height - 120,
+    w: 50,
+    h: 50,
+    vy: 0,
+    jump: false
+};
+
+// COP
+let cop = {
+    x: 300,
+    y: canvas.height - 120,
+    w: 50,
+    h: 50
+};
+
+// COIN
+let coin = {
+    x: 600,
+    y: canvas.height - 150,
+    r: 15
+};
+
+// OBSTACLE
+let obstacle = {
+    x: 800,
+    y: canvas.height - 120,
+    w: 40,
+    h: 60
+};
+
+let gravity = 0.8;
 let score = 0;
+let gameOver = false;
 
-// positions
-let px = 50, py = 80;
-let cx = 200;
-let jump = false;
+// KEY CONTROL
+document.addEventListener("keydown", (e)=>{
+    if(e.key === "ArrowRight") player.x += 15;
+    if(e.key === "ArrowLeft") player.x -= 15;
 
-// start game
-function startGame(){
-    document.getElementById("intro").style.display = "none";
-    document.getElementById("game").style.display = "block";
-    gameStarted = true;
-}
-
-// player control
-document.addEventListener("keydown", function(e){
-    if(!gameStarted) return;
-
-    if(e.key == "ArrowRight") px += 10;
-    if(e.key == "ArrowLeft") px -= 10;
-
-    if(e.key == " " && !jump){
-        jump = true;
-        let up = 0;
-        let jumpInt = setInterval(()=>{
-            if(up < 100){
-                py += 5;
-                up += 5;
-            } else {
-                clearInterval(jumpInt);
-                let down = setInterval(()=>{
-                    if(py > 80){
-                        py -= 5;
-                    } else {
-                        clearInterval(down);
-                        jump = false;
-                    }
-                },20);
-            }
-        },20);
+    if(e.key === " " && !player.jump){
+        player.vy = -15;
+        player.jump = true;
     }
-
-    updatePlayer();
 });
 
-function updatePlayer(){
-    document.getElementById("player").style.left = px + "px";
-    document.getElementById("player").style.bottom = py + "px";
+// COLLISION CHECK
+function collide(a,b){
+    return a.x < b.x + (b.w || b.r*2) &&
+           a.x + a.w > b.x &&
+           a.y < b.y + (b.h || b.r*2) &&
+           a.y + a.h > b.y;
 }
 
-// obstacle move
-let ox = 600;
-function moveObstacle(){
-    ox -= 6;
-    if(ox < -50) ox = 600;
+// GAME LOOP
+function update(){
 
-    document.getElementById("obstacle").style.left = ox + "px";
-
-    // collision
-    if(ox < px+40 && ox > px-40 && py <= 100){
-        gameOver();
+    if(gameOver){
+        ctx.fillStyle = "rgba(0,0,0,0.7)";
+        ctx.fillRect(0,0,canvas.width,canvas.height);
+        ctx.fillStyle = "white";
+        ctx.font = "50px Arial";
+        ctx.fillText("Game Over 💥", canvas.width/2 - 150, canvas.height/2);
+        ctx.font = "25px Arial";
+        ctx.fillText("Score: " + score, canvas.width/2 - 60, canvas.height/2 + 50);
+        return;
     }
-}
 
-// coin
-let coinX = 400;
-function moveCoin(){
-    coinX -= 4;
-    if(coinX < -30) coinX = 600;
+    ctx.clearRect(0,0,canvas.width,canvas.height);
 
-    document.getElementById("coin").style.left = coinX + "px";
+    // GRAVITY
+    player.y += player.vy;
+    player.vy += gravity;
 
-    if(coinX < px+40 && coinX > px-40){
+    if(player.y > canvas.height - 120){
+        player.y = canvas.height - 120;
+        player.jump = false;
+    }
+
+    // COP AI CHASE
+    if(cop.x < player.x) cop.x += 2;
+    else cop.x -= 1;
+
+    // OBSTACLE MOVE
+    obstacle.x -= 6;
+    if(obstacle.x < -50) obstacle.x = canvas.width + 200;
+
+    // COIN MOVE
+    coin.x -= 4;
+    if(coin.x < -20) coin.x = canvas.width + 300;
+
+    // SCORE CHECK (coin)
+    if(Math.abs(player.x - coin.x) < 40 && Math.abs(player.y - coin.y) < 40){
         score += 10;
-        coinX = 600;
-        document.getElementById("score").innerText = "Score: " + score;
+        coin.x = canvas.width + 200;
     }
-}
 
-// cop AI
-function chase(){
-    if(cx < px) cx += 2;
-    else cx -= 1;
-
-    document.getElementById("cop").style.left = cx + "px";
-
-    if(Math.abs(cx - px) < 30){
-        gameOver();
+    // COLLISION
+    if(collide(player, obstacle) || Math.abs(player.x - cop.x) < 40){
+        gameOver = true;
     }
+
+    // DRAW PLAYER
+    ctx.fillStyle = "red";
+    ctx.fillRect(player.x, player.y, player.w, player.h);
+
+    // DRAW COP
+    ctx.fillStyle = "blue";
+    ctx.fillRect(cop.x, cop.y, cop.w, cop.h);
+
+    // DRAW OBSTACLE
+    ctx.fillStyle = "black";
+    ctx.fillRect(obstacle.x, obstacle.y, obstacle.w, obstacle.h);
+
+    // DRAW COIN
+    ctx.fillStyle = "gold";
+    ctx.beginPath();
+    ctx.arc(coin.x, coin.y, coin.r, 0, Math.PI*2);
+    ctx.fill();
+
+    // SCORE
+    ctx.fillStyle = "white";
+    ctx.font = "20px Arial";
+    ctx.fillText("Score: " + score, 20, 30);
+
+    requestAnimationFrame(update);
 }
 
-// game over
-function gameOver(){
-    document.getElementById("gameOver").style.display = "flex";
-    gameStarted = false;
-}
-
-// loop
-function loop(){
-    if(gameStarted){
-        moveObstacle();
-        moveCoin();
-        chase();
-    }
-    requestAnimationFrame(loop);
-}
-loop();
-
+update();
 </script>
 
 </body>
